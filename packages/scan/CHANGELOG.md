@@ -1,5 +1,11 @@
 # react-scan
 
+## 0.5.4
+
+### Patch Changes
+
+- lite
+
 ## 0.5.3
 
 ### Patch Changes
