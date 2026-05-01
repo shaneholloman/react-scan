@@ -208,7 +208,6 @@
     "@types/node": "^20.17.9",
     "bippy": "^0.5.30",
     "commander": "^14.0.0",
-    "esbuild": "^0.25.0",
     "estree-walker": "^3.0.3",
     "picocolors": "^1.1.1",
     "preact": "^10.25.1",
@@ -223,6 +222,7 @@
     "@types/react-router": "^5.1.0",
     "clsx": "^2.1.1",
     "es-module-lexer": "^1.5.4",
+    "esbuild": "^0.25.0",
     "next": "*",
     "postcss-cli": "^11.0.0",
     "publint": "^0.2.12",
@@ -236,8 +236,14 @@
     "vitest": "^3.0.0"
   },
   "peerDependencies": {
+    "esbuild": ">=0.18.0",
     "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0",
     "react-dom": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "esbuild": {
+      "optional": true
+    }
   },
   "optionalDependencies": {
     "unplugin": "2.1.0"
