@@ -7,10 +7,9 @@ dist
 build
 !packages/extension/build/
 playgrounds
-# SSL Certificates
-bin/certs/*.pem
-bin/certs/*.key
-.cursor
+# Turbo cache
+.turbo/
 # Playwright
 test-results/
 playwright-report/
+.cursor
