@@ -1,5 +1,5 @@
 import autoprefixer from 'autoprefixer';
-import tailwindcss from 'tailwindcss';
+import tailwindcss from '@tailwindcss/postcss';
 import remToPx from './postcss.rem2px.mjs';
 
 export default {

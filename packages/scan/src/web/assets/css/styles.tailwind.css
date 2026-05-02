@@ -1,6 +1,5 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../../../../tailwind.config.mjs";
 
 * {
   outline: none !important;
@@ -286,7 +285,7 @@ svg {
 
 @keyframes shimmer {
   100% {
-    @apply translate-x-full;
+    transform: translateX(100%);
   }
 }
 
@@ -350,10 +349,10 @@ svg {
 
 @keyframes blink {
   from {
-    @apply opacity-100;
+    opacity: 1;
   }
   to {
-    @apply opacity-0;
+    opacity: 0;
   }
 }
 
