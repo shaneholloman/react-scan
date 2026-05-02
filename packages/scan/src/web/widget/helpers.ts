@@ -1,4 +1,5 @@
-import { MIN_SIZE, SAFE_AREA } from '../constants';
+import { MIN_SIZE } from '../constants';
+import { getSafeArea, type SafeAreaInsets } from '../utils/safe-area';
 import type { Corner, Position, ResizeHandleProps, Size } from './types';
 
 class WindowDimensions {
@@ -8,17 +9,18 @@ class WindowDimensions {
   constructor(
     public width: number,
     public height: number,
+    public safeArea: SafeAreaInsets,
   ) {
-    this.maxWidth = width - SAFE_AREA * 2;
-    this.maxHeight = height - SAFE_AREA * 2;
+    this.maxWidth = width - safeArea.left - safeArea.right;
+    this.maxHeight = height - safeArea.top - safeArea.bottom;
   }
 
   rightEdge(width: number): number {
-    return this.width - width - SAFE_AREA;
+    return this.width - width - this.safeArea.right;
   }
 
   bottomEdge(height: number): number {
-    return this.height - height - SAFE_AREA;
+    return this.height - height - this.safeArea.bottom;
   }
 
   isFullWidth(width: number): boolean {
@@ -32,19 +34,31 @@ class WindowDimensions {
 
 let cachedWindowDimensions: WindowDimensions | undefined;
 
+const safeAreaMatches = (a: SafeAreaInsets, b: SafeAreaInsets): boolean =>
+  a.top === b.top &&
+  a.right === b.right &&
+  a.bottom === b.bottom &&
+  a.left === b.left;
+
 export const getWindowDimensions = () => {
   const currentWidth = window.innerWidth;
   const currentHeight = window.innerHeight;
+  const currentSafeArea = getSafeArea();
 
   if (
     cachedWindowDimensions &&
     cachedWindowDimensions.width === currentWidth &&
-    cachedWindowDimensions.height === currentHeight
+    cachedWindowDimensions.height === currentHeight &&
+    safeAreaMatches(cachedWindowDimensions.safeArea, currentSafeArea)
   ) {
     return cachedWindowDimensions;
   }
 
-  cachedWindowDimensions = new WindowDimensions(currentWidth, currentHeight);
+  cachedWindowDimensions = new WindowDimensions(
+    currentWidth,
+    currentHeight,
+    currentSafeArea,
+  );
 
   return cachedWindowDimensions;
 };
@@ -98,6 +112,7 @@ export const calculatePosition = (
 
   const windowWidth = window.innerWidth;
   const windowHeight = window.innerHeight;
+  const safeArea = getSafeArea();
 
   // Check if widget is minimized
   const isMinimized = width === MIN_SIZE.width;
@@ -105,35 +120,46 @@ export const calculatePosition = (
   // Only bound dimensions if minimized
   const effectiveWidth = isMinimized
     ? width
-    : Math.min(width, windowWidth - SAFE_AREA * 2);
+    : Math.min(width, windowWidth - safeArea.left - safeArea.right);
   const effectiveHeight = isMinimized
     ? height
-    : Math.min(height, windowHeight - SAFE_AREA * 2);
+    : Math.min(height, windowHeight - safeArea.top - safeArea.bottom);
 
   // Calculate base positions
   let x: number;
   let y: number;
 
-  let leftBound = SAFE_AREA;
-  let rightBound =  windowWidth - effectiveWidth - SAFE_AREA;
-  let topBound = SAFE_AREA;
-  let bottomBound = windowHeight - effectiveHeight - SAFE_AREA;
+  let leftBound = safeArea.left;
+  let rightBound =  windowWidth - effectiveWidth - safeArea.right;
+  let topBound = safeArea.top;
+  let bottomBound = windowHeight - effectiveHeight - safeArea.bottom;
+
+  // In RTL the toolbar's containing block resolves to the right viewport
+  // edge (position: fixed with both left:0 and right:0 plus an explicit
+  // width pins to inline-end). translateX(negative) moves it leftward
+  // from that right anchor, so the *physical* right inset is `-safeArea.right`
+  // and the physical left inset is `-(windowWidth - width - safeArea.left)`.
+  // With symmetric SAFE_AREA these collapse to the original `-leftBound` /
+  // `-rightBound` values; asymmetric `safeArea` would otherwise apply the
+  // wrong edge to the wrong physical side.
+  const rtlRightCornerX = -safeArea.right;
+  const rtlLeftCornerX = -(windowWidth - effectiveWidth - safeArea.left);
 
   switch (corner) {
     case 'top-right':
-      x = isRTL ? -leftBound : rightBound;
+      x = isRTL ? rtlRightCornerX : rightBound;
       y = topBound;
       break;
     case 'bottom-right':
-      x = isRTL ? -leftBound : rightBound;
+      x = isRTL ? rtlRightCornerX : rightBound;
       y = bottomBound;
       break;
     case 'bottom-left':
-      x = isRTL ? -rightBound : leftBound;
+      x = isRTL ? rtlLeftCornerX : leftBound;
       y = bottomBound;
       break;
     case 'top-left':
-      x = isRTL ? -rightBound : leftBound;
+      x = isRTL ? rtlLeftCornerX : leftBound;
       y = topBound;
       break;
     default:
@@ -145,13 +171,11 @@ export const calculatePosition = (
   // Only ensure positions are within bounds if minimized
   if (isMinimized) {
     if (isRTL) {
-      // For RTL
       x = Math.min(
-        -leftBound,
-        Math.max(x, -rightBound)
+        rtlRightCornerX,
+        Math.max(x, rtlLeftCornerX),
       );
     } else {
-      // For LTR
       x = Math.max(
         leftBound,
         Math.min(x, rightBound),
@@ -224,9 +248,10 @@ export const calculateNewSizeAndPosition = (
   deltaY: number,
 ): { newSize: Size; newPosition: Position } => {
   const isRTL = getComputedStyle(document.body).direction === 'rtl';
+  const safeArea = getSafeArea();
 
-  const maxWidth = window.innerWidth - SAFE_AREA * 2;
-  const maxHeight = window.innerHeight - SAFE_AREA * 2;
+  const maxWidth = window.innerWidth - safeArea.left - safeArea.right;
+  const maxHeight = window.innerHeight - safeArea.top - safeArea.bottom;
 
   let newWidth = initialSize.width;
   let newHeight = initialSize.height;
@@ -236,27 +261,27 @@ export const calculateNewSizeAndPosition = (
   // horizontal resize for RTL
   if (isRTL && position.includes('right')) {
     // Check if we have enough space on the right
-    const availableWidth = -initialPosition.x + initialSize.width - SAFE_AREA;
+    const availableWidth = -initialPosition.x + initialSize.width - safeArea.right;
     const proposedWidth = Math.min(initialSize.width + deltaX, availableWidth);
     newWidth = Math.min(maxWidth, Math.max(MIN_SIZE.width, proposedWidth));
     newX = initialPosition.x + (newWidth - initialSize.width);
   }
   if (isRTL && position.includes('left')) {
     // Check if we have enough space on the left
-    const availableWidth = window.innerWidth - initialPosition.x - SAFE_AREA;
+    const availableWidth = window.innerWidth - initialPosition.x - safeArea.left;
     const proposedWidth = Math.min(initialSize.width - deltaX, availableWidth);
     newWidth = Math.min(maxWidth, Math.max(MIN_SIZE.width, proposedWidth));
   }
   // horizontal resize for LTR
   if (!isRTL && position.includes('right')) {
     // Check if we have enough space on the right
-    const availableWidth = window.innerWidth - initialPosition.x - SAFE_AREA;
+    const availableWidth = window.innerWidth - initialPosition.x - safeArea.right;
     const proposedWidth = Math.min(initialSize.width + deltaX, availableWidth);
     newWidth = Math.min(maxWidth, Math.max(MIN_SIZE.width, proposedWidth));
   }
   if (!isRTL && position.includes('left')) {
     // Check if we have enough space on the left
-    const availableWidth = initialPosition.x + initialSize.width - SAFE_AREA;
+    const availableWidth = initialPosition.x + initialSize.width - safeArea.left;
     const proposedWidth = Math.min(initialSize.width - deltaX, availableWidth);
     newWidth = Math.min(maxWidth, Math.max(MIN_SIZE.width, proposedWidth));
     newX = initialPosition.x - (newWidth - initialSize.width);
@@ -265,7 +290,7 @@ export const calculateNewSizeAndPosition = (
   // vertical resize
   if (position.includes('bottom')) {
     // Check if we have enough space at the bottom
-    const availableHeight = window.innerHeight - initialPosition.y - SAFE_AREA;
+    const availableHeight = window.innerHeight - initialPosition.y - safeArea.bottom;
     const proposedHeight = Math.min(
       initialSize.height + deltaY,
       availableHeight,
@@ -277,7 +302,7 @@ export const calculateNewSizeAndPosition = (
   }
   if (position.includes('top')) {
     // Check if we have enough space at the top
-    const availableHeight = initialPosition.y + initialSize.height - SAFE_AREA;
+    const availableHeight = initialPosition.y + initialSize.height - safeArea.top;
     const proposedHeight = Math.min(
       initialSize.height - deltaY,
       availableHeight,
@@ -289,20 +314,24 @@ export const calculateNewSizeAndPosition = (
     newY = initialPosition.y - (newHeight - initialSize.height);
   }
 
-  let leftBound = SAFE_AREA;
-  let rightBound = window.innerWidth - SAFE_AREA - newWidth;
-  let topBound = SAFE_AREA;
-  let bottomBound = window.innerHeight - SAFE_AREA - newHeight;
+  let leftBound = safeArea.left;
+  let rightBound = window.innerWidth - safeArea.right - newWidth;
+  let topBound = safeArea.top;
+  let bottomBound = window.innerHeight - safeArea.bottom - newHeight;
+
+  // See `calculatePosition` for why RTL uses these values: the toolbar is
+  // right-anchored in RTL, so physical-edge insets need different bounds
+  // than the LTR `[leftBound, rightBound]` clamp.
+  const rtlRightCornerX = -safeArea.right;
+  const rtlLeftCornerX = -(window.innerWidth - newWidth - safeArea.left);
 
   // Ensure position stays within bounds
   if (isRTL) {
-    // for RTL
     newX = Math.min(
-      -leftBound,
-      Math.max(newX, -rightBound)
+      rtlRightCornerX,
+      Math.max(newX, rtlLeftCornerX),
     );
   } else {
-    // for LTR
     newX = Math.max(
       leftBound,
       Math.min(newX, rightBound),
